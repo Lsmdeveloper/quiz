@@ -1,0 +1,90 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.dist-info/
+.eggs/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.coverage*
+htmlcov/
+.cache/
+pip-wheel-metadata/
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
+venv/
+
+# Env/secrets
+.env
+.env.*
+*.env
+
+# ---- Node / Front-end ----
+node_modules/
+dist/
+build/
+.vite/
+.next/
+.nuxt/
+.svelte-kit/
+coverage/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- IDE / Editor ----
+.vscode/
+.idea/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+EOF
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.dist-info/
+.eggs/
+.mypy_cache/
+.pytest_cache/
+.coverage*
+htmlcov/
+.cache/
+
+# Virtual envs
+.venv/
+venv/
+**/.venv/
+**/venv/
+
+# Node / Front-end (em qualquer subpasta)
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+**/.next/
+**/.nuxt/
+**/.svelte-kit/
+**/coverage/
+*.log
+npm-debug.log*
+yarn-*.log
+pnpm-debug.log*
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
