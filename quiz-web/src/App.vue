@@ -12,7 +12,7 @@
         </div>
       </nav>
     </header>
-    <main class="flex flex-col items-center justify-center min-h-[calc(100vh-540px)] max-w-5xl mx-auto p-4">
+    <main class="flex flex-col items-start justify-center min-h-[calc(100vh-540px)] max-w-5xl p-4">
       <RouterView />
     </main>
   </div>

@@ -1,3 +1,5 @@
+import json
+from decimal import Decimal
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -227,37 +229,69 @@ class SaveAnswers(APIView):
                 defaults={"selected": choices},
             )
         return Response({"ok": True})
+    
+LETTERS = ["a", "b", "c", "d"]
+def grade_session(session, quiz):
+    # mapa de corretas por slug
+    correct_by_slug = {}
+    for q in quiz.questions.prefetch_related("choices").order_by("order", "id"):
+        choices = list(q.choices.all().order_by("order", "id"))
+        idx = next((i for i, ch in enumerate(choices) if ch.is_correct), None)
+        if idx is not None and idx < len(LETTERS):
+            correct_by_slug[q.slug] = LETTERS[idx]
+
+    # respostas do usuário (independente do related_name)
+    user_answers_qs = Answer.objects.filter(session=session).select_related("question")
+    answers = {}
+    for a in user_answers_qs:
+        sel = a.selected or []
+        # garante lista de letras
+        if isinstance(sel, str):
+            sel = [sel]
+        answers[a.question.slug] = sel
+
+    total = len(correct_by_slug)
+    score = sum(1 for slug, corr in correct_by_slug.items() if answers.get(slug, []) == [corr])
+    percent = 0 if total == 0 else round(score / total * 100)
+    msg = "Excelente!" if percent >= 85 else ("Muito bom!" if percent >= 60 else "Continue praticando!")
+    return {"score": score, "total": total, "percent": percent, "message": msg}
 
 class FinishQuiz(APIView):
-    def post(self, req, session_id):
-        slug = req.query_params.get("slug", "iq")
+    def post(self, request, session_id):
+        slug = request.query_params.get("slug")
+        if not slug:
+            return Response({"error":"missing slug"}, status=400)
+
         try:
             quiz = Quiz.objects.get(slug=slug, is_active=True)
         except Quiz.DoesNotExist:
             return Response({"error":"quiz not found"}, status=404)
+
         try:
-            s = QuizSession.objects.get(pk=session_id)
+            s = QuizSession.objects.get(pk=session_id, quiz=quiz)
         except QuizSession.DoesNotExist:
             return Response({"error":"session not found"}, status=404)
 
-        # calcula e salva o resultado (sem expor ainda)
-        s.result = calc_result(s, quiz)
+        # 1) Calcula e persiste resultado
+        result = grade_session(s, quiz)
+        s.result = result
         s.save(update_fields=["result"])
 
-        # sem token MP → mock pra dev
-        if not settings.MP_ACCESS_TOKEN or not sdk:
-            return Response({
-                "preference_id": "pref_mock",
-                "init_point": f"{settings.APP_BASE_URL}/quiz/mock-checkout?sid={s.pk}&quiz={quiz.slug}",
-                "sessionId": s.pk
-            })
+        # 2) Sem credencial → só devolve resultado
+        if not getattr(settings, "MP_ACCESS_TOKEN", None) or not sdk:
+            return Response({"sessionId": str(s.pk), "result": result})
 
-        pref = sdk.preference().create({
+        # 3) Monta payload 100% serializável
+        price = getattr(settings, "QUIZ_PRICE", 0)
+        if isinstance(price, Decimal):
+            price = float(price)
+
+        payload = {
             "items": [{
                 "title": f"Resultado do Quiz: {quiz.title}",
                 "quantity": 1,
-                "currency_id": settings.CURRENCY,
-                "unit_price": settings.QUIZ_PRICE,
+                "currency_id": str(getattr(settings, "CURRENCY", "BRL")),
+                "unit_price": float(price),
             }],
             "back_urls": {
                 "success": f"{settings.APP_BASE_URL}/quiz/sucesso",
@@ -266,16 +300,32 @@ class FinishQuiz(APIView):
             },
             "auto_return": "approved",
             "notification_url": f"{settings.API_BASE_URL}/api/webhooks/mercadopago",
-            "external_reference": s.pk,
-        })["response"]
+            "external_reference": str(s.pk),   # 👈 UUID como string
+        }
 
-        s.mp_pref_id = pref.get("id")
-        s.save(update_fields=["mp_pref_id"])
-        return Response({
-            "preference_id": pref.get("id"),
-            "init_point": pref.get("init_point"),
-            "sessionId": s.pk
-        })
+        # Diagnóstico: garante que o payload é “json-dumpable”
+        try:
+            json.dumps(payload)
+        except TypeError as te:
+            return Response({"error": "payload_not_serializable", "detail": str(te), "payload": str(payload)}, status=500)
+
+        try:
+            pref = sdk.preference().create(payload)["response"]
+            s.mp_pref_id = pref.get("id")
+            s.save(update_fields=["mp_pref_id"])
+            return Response({
+                "sessionId": str(s.pk),
+                "result": result,
+                "preference_id": pref.get("id"),
+                "init_point": pref.get("sandbox_init_point") or pref.get("init_point"),
+            })
+        except Exception as e:
+            # Não quebre o front: devolve resultado + erro do MP
+            return Response({
+                "sessionId": str(s.pk),
+                "result": result,
+                "mp_error": str(e),
+            }, status=502)
 
 def verify_mp_signature(x_signature: str, x_request_id: str, payment_id: str) -> bool:
     secret = settings.MP_WEBHOOK_SECRET

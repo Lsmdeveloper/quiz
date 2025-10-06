@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6 max-w-2xl mx-auto">
+  <div class="p-6 max-w-2xl">
     <h2 class="text-2xl font-bold mb-4">{{ quiz?.title }}</h2>
 
     <!-- Barra de progresso -->
@@ -34,7 +34,10 @@
             :name="'question-' + currentQuestion.slug"
             :value="letter"
             v-model="answers[currentQuestion.slug]"
-            class="w-4 h-4"
+            class="relative w-5 h-5 appearance-none rounded-full border-2 border-gray-500 cursor-pointer
+            bg-white checked:border-[#25D366] checked:bg-[#25D366]
+            before:content-[''] before:absolute before:inset-0 before:m-auto before:w-2 before:h-2 before:rounded-full before:bg-transparent
+            checked:before:content-['✔'] checked:before:text-white checked:before:text-[12px] checked:before:flex checked:before:items-center checked:before:justify-center"
             required
           />
           <span class="select-none">
@@ -47,7 +50,7 @@
       <div class="mt-6 flex gap-3">
         <button
           type="button"
-          class="px-4 py-2 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          class="px-4 py-2 rounded border border-gray-300 text-white bg-red-700 hover:bg-red-500 disabled:opacity-50"
           @click="goPrev"
           :disabled="currentIndex === 0 || isSubmitting"
         >
@@ -75,7 +78,7 @@
       </div>
     </form>
 
-    <!-- Resultado -->
+    <div v-if="preferenceId" id="mp-button-container" class="mt-4"></div>
     <div
       v-if="result"
       class="mt-8 p-4 border rounded bg-green-100 text-green-800"
@@ -93,10 +96,11 @@ export default {
       quiz: null,
       sessionId: null,
       questions: [],
-      answers: {},        // { [question.slug]: 'a' | 'b' | 'c' | 'd' }
+      answers: {},      
       currentIndex: 0,
       isSubmitting: false,
       result: null,
+      preferenceId: null
     };
   },
   computed: {
@@ -150,7 +154,6 @@ export default {
   methods: {
     handleKeys(e) {
       if (this.isSubmitting || !this.currentQuestion) return;
-      // Enter: avança (ou finaliza se for a última)
       if (e.key === "Enter") {
         e.preventDefault();
         if (this.isLast) {
@@ -159,12 +162,10 @@ export default {
           if (this.answers[this.currentQuestion.slug]) this.goNext();
         }
       }
-      // Shift+Enter: volta
       if (e.key === "Enter" && e.shiftKey) {
         e.preventDefault();
         if (this.currentIndex > 0) this.goPrev();
       }
-      // Setas esquerda/direita podem navegar (opcional)
       if (e.key === "ArrowLeft" && this.currentIndex > 0) this.goPrev();
       if (e.key === "ArrowRight" && !this.isLast && this.answers[this.currentQuestion.slug]) this.goNext();
     },
@@ -184,17 +185,14 @@ export default {
         return;
       }
       this.isSubmitting = true;
-
       try {
-        // monta payload no formato que seu backend espera
         const payload = {
           answers: this.questions.map((q) => ({
-            questionId: q.slug,                 // seu SaveAnswers usa slug
-            choices: [this.answers[q.slug]],    // radiobutton => 1 letra
+            questionId: q.slug,                
+            choices: [this.answers[q.slug]], 
           })),
         };
 
-        // salva todas as respostas
         const r1 = await fetch(`http://localhost:8000/api/quiz/${this.sessionId}/answer`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -205,18 +203,31 @@ export default {
           throw new Error(`Salvar respostas: ${t}`);
         }
 
-        // finaliza e pega o resultado
         const r2 = await fetch(
           `http://localhost:8000/api/quiz/${this.sessionId}/finish?slug=${this.quiz.slug}`,
           { method: "POST" }
         );
+
         if (!r2.ok) {
           const t = await r2.text();
           throw new Error(`Finalizar quiz: ${t}`);
         }
-        this.result = await r2.json();
 
-        // 100% na barra ao finalizar
+        const data = await r2.json();
+        if (data.init_point) {
+          if (data.result?.score != null) {
+            localStorage.setItem("quiz:lastScore", String(data.result.score));
+          }
+          localStorage.setItem("quiz:lastSessionId", this.sessionId);
+          localStorage.setItem("quiz:lastSlug", this.quiz.slug);
+
+          window.removeEventListener("keydown", this.handleKeys);
+          this.isSubmitting = true;
+          window.location.href = data.init_point;
+          return;
+        }
+        console.warn("Mercado Pago não retornou init_point:", data);
+        this.result = data.result || null;
         this.currentIndex = this.totalSteps - 1;
       } catch (err) {
         console.error(err.message);

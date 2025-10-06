@@ -20,6 +20,7 @@ class Quiz(models.Model):
 class QuizSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     quiz = models.ForeignKey('Quiz', on_delete=models.CASCADE, related_name='sessions', null=True, blank=True)
+    mp_pref_id = models.CharField(max_length=100, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     result = models.JSONField(null=True, blank=True)
 
