@@ -23,9 +23,24 @@ class QuestionAdmin(admin.ModelAdmin):
 
 @admin.register(QuizSession)
 class QuizSessionAdmin(admin.ModelAdmin):
-    list_display = ("id", "paid", "mp_pref_id", "mp_payment_id", "created_at")
-    list_filter = ("paid",)
-    search_fields = ("id", "mp_payment_id")
+    list_display = ("id", "quiz", "created_at", "paid_display", "mp_pref_display", "mp_payment_display")
+    list_filter = ("quiz", "created_at")  # remova 'paid' daqui pois não é Field
+    search_fields = ("id",)
+
+    def paid_display(self, obj):
+        if hasattr(obj, "paid"):
+            return getattr(obj, "paid")
+        return bool(getattr(obj, "mp_payment_id", None))
+    paid_display.boolean = True
+    paid_display.short_description = "Paid"
+
+    def mp_pref_display(self, obj):
+        return getattr(obj, "mp_pref_id", "-")
+    mp_pref_display.short_description = "MP Pref ID"
+
+    def mp_payment_display(self, obj):
+        return getattr(obj, "mp_payment_id", "-")
+    mp_payment_display.short_description = "MP Payment ID"
 
 @admin.register(Answer)
 class AnswerAdmin(admin.ModelAdmin):

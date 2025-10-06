@@ -6,9 +6,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from mercadopago import SDK
 import requests, hmac, hashlib
-
+from rest_framework.generics import ListAPIView
 from .models import Quiz, QuizSession, Question, Choice, Answer
-from .serializers import QuestionOutSerializer, SaveAnswersSerializer, QuizCreateSerializer, QuestionCreateSerializer, BulkQuestionsSerializer
+from .serializers import QuizSerializer, QuestionOutSerializer, SaveAnswersSerializer, QuizCreateSerializer, QuestionCreateSerializer, BulkQuestionsSerializer
 
 sdk = SDK(settings.MP_ACCESS_TOKEN) if settings.MP_ACCESS_TOKEN else None
 
@@ -62,9 +62,13 @@ def calc_result(session: QuizSession, quiz: Quiz):
 class Health(APIView):
     def get(self, req): return Response({"ok": True})
 
+class ListQuizzes(ListAPIView):
+    queryset = Quiz.objects.all()
+    serializer_class = QuizSerializer
+
 class ListQuestions(APIView):
     def get(self, req):
-        slug = req.query_params.get("slug", "iq")      # default: quiz "iq"
+        slug = req.query_params.get("slug", "iq")
         try:
             quiz = Quiz.objects.get(slug=slug, is_active=True)
         except Quiz.DoesNotExist:
@@ -160,11 +164,47 @@ class BulkCreateQuestions(APIView):
         return Response({"created": created}, status=201)
 
 
+# class StartQuiz(APIView):
+#     def post(self, req):
+#         slug = req.data.get("slug")
+#         if not slug:
+#             return Response({"error": "Missing slug"}, status=400)
+
+#         try:
+#             quiz = Quiz.objects.get(slug=slug, is_active=True)
+#         except Quiz.DoesNotExist:
+#             return Response({"error": "quiz not found"}, status=404)
+
+#         qs = quiz.questions.prefetch_related("choices").all()
+#         questions_data = QuestionOutSerializer(qs, many=True).data
+
+#         return Response({
+#             "session_id": None,
+#             "quiz": QuizSerializer(quiz).data,
+#             "questions": questions_data
+#         })
 class StartQuiz(APIView):
     def post(self, req):
-        s = QuizSession.objects.create()
-        return Response({"sessionId": s.pk})
+        slug = req.data.get("slug")
+        if not slug:
+            return Response({"error": "Missing slug"}, status=400)
 
+        try:
+            quiz = Quiz.objects.get(slug=slug, is_active=True)
+        except Quiz.DoesNotExist:
+            return Response({"error": "quiz not found"}, status=404)
+
+        # cria e salva a sessão atrelada ao quiz
+        s = QuizSession.objects.create(quiz=quiz)
+
+        qs = quiz.questions.prefetch_related("choices").all()
+        questions_data = QuestionOutSerializer(qs, many=True).data
+
+        return Response({
+            "session_id": s.pk,                      
+            "quiz": QuizSerializer(quiz).data,
+            "questions": questions_data
+        })
 class SaveAnswers(APIView):
     def post(self, req, session_id):
         try: s = QuizSession.objects.get(pk=session_id)

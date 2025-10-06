@@ -1,12 +1,12 @@
 from django.urls import path
 from .views import (
-    BulkCreateQuestions, CreateQuestion, CreateQuiz, Health, ListQuestions, StartQuiz, SaveAnswers, FinishQuiz, GetResult, MPWebhook
+    BulkCreateQuestions, CreateQuestion, CreateQuiz, ListQuizzes, Health, ListQuestions, StartQuiz, SaveAnswers, FinishQuiz, GetResult, MPWebhook
 )
 
 urlpatterns = [
     path("health", Health.as_view()),
     path("api/quiz/questions", ListQuestions.as_view()),     
-    
+    path("api/quiz/list", ListQuizzes.as_view()),
     path("api/quiz", CreateQuiz.as_view()),                                   
     path("api/quiz/<slug:slug>/questions", CreateQuestion.as_view()),         
     path("api/quiz/<slug:slug>/questions/bulk", BulkCreateQuestions.as_view()),

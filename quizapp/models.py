@@ -1,5 +1,6 @@
 from django.db import models
 import secrets
+import uuid
 
 def gen_id():
     return secrets.token_hex(16)  # 32 chars
@@ -17,13 +18,10 @@ class Quiz(models.Model):
         return self.title
     
 class QuizSession(models.Model):
-    id = models.CharField(primary_key=True, max_length=32, default=gen_id, editable=False)
-    paid = models.BooleanField(default=False, db_index=True)
-    result = models.JSONField(null=True, blank=True)
-    mp_pref_id = models.CharField(max_length=64, null=True, blank=True)
-    mp_payment_id = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    quiz = models.ForeignKey('Quiz', on_delete=models.CASCADE, related_name='sessions', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    result = models.JSONField(null=True, blank=True)
 
 class Question(models.Model):
     KIND_SINGLE   = "single"     # uma alternativa correta
