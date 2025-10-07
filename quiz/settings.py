@@ -109,4 +109,4 @@ if os.environ.get("AUTO_CREATE_SUPERUSER", "") == "1":
     password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "admin123")
     if not User.objects.filter(username=username).exists():
         User.objects.create_superuser(username, email, password)
-        print(f"✅ Superusuário '{username}' criado automaticamente!")
+        print(f" Superusuário '{username}' criado automaticamente!")
