@@ -316,21 +316,36 @@ class FinishQuiz(APIView):
             "external_reference": str(s.pk),   # 👈 UUID como string
         }
 
-        # Diagnóstico: garante que o payload é “json-dumpable”
         try:
             json.dumps(payload)
         except TypeError as te:
             return Response({"error": "payload_not_serializable", "detail": str(te), "payload": str(payload)}, status=500)
 
         try:
-            pref = sdk.preference().create(payload)["response"]
+            mode = "prod" if str(getattr(settings, "MP_ACCESS_TOKEN","")).startswith("APP_USR-") else "sandbox"
+            print("[MP] mode:", mode, "APP_BASE_URL:", settings.APP_BASE_URL, "API_BASE_URL:", settings.API_BASE_URL)
+
+            resp = sdk.preference().create(payload)
+            pref = resp.get("response", {}) or {}
+
+            print("[MP PREF]", {
+                "status": resp.get("status"),
+                "id": pref.get("id"),
+                "init_point": pref.get("init_point"),
+                "sandbox_init_point": pref.get("sandbox_init_point"),
+                "collector_id": pref.get("collector_id"),
+            })
+            # pref = sdk.preference().create(payload)["response"]
+
             s.mp_pref_id = pref.get("id")
             s.save(update_fields=["mp_pref_id"])
+            init_point = pref.get("init_point") or pref.get("sandbox_init_point")    
             return Response({
                 "sessionId": str(s.pk),
                 "result": result,
                 "preference_id": pref.get("id"),
-                "init_point": pref.get("sandbox_init_point") or pref.get("init_point"),
+                "init_point": init_point,
+                "mode": "prod" if pref.get("init_point") else "sandbox",
             })
         except Exception as e:
             # Não quebre o front: devolve resultado + erro do MP
