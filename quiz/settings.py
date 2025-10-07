@@ -7,7 +7,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret")
-DEBUG = True
+DEBUG = os.getenv("DEBUG", False)
 ALLOWED_HOSTS = ["*"]
 
 # Application definition
@@ -97,7 +97,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MP_ACCESS_TOKEN   = os.getenv("MP_ACCESS_TOKEN", "")
 MP_WEBHOOK_SECRET = os.getenv("MP_WEBHOOK_SECRET", "")
-QUIZ_PRICE        = float(os.getenv("QUIZ_PRICE", "49.90"))
+QUIZ_PRICE        = float(os.getenv("QUIZ_PRICE", "1.00"))
 CURRENCY          = os.getenv("CURRENCY", "BRL")
 API_BASE_URL      = os.getenv("API_BASE_URL", "http://localhost:3000")
 APP_BASE_URL      = os.getenv("APP_BASE_URL", "http://localhost:5173")

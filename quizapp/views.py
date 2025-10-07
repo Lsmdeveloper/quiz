@@ -1,5 +1,7 @@
 import json
 from decimal import Decimal
+import logging
+import os
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -61,9 +63,20 @@ def calc_result(session: QuizSession, quiz: Quiz):
         "disclaimer": "Este resultado é indicativo e não substitui testes psicométricos padronizados."
     }
 
-class Health(APIView):
-    def get(self, req): return Response({"ok": True})
+# class Health(APIView):
+#     def get(self, req): return Response({"ok": True})
+#     MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
+#     MP_MODE = "prod" if MP_ACCESS_TOKEN.startswith("APP_USR-") else "sandbox"
+#     print(f"[MP] running in {MP_MODE} (token prefix: {MP_ACCESS_TOKEN[:8]}…)")
+log = logging.getLogger(__name__)
 
+class Health(APIView):
+    def get(self, req):
+        token = os.getenv("MP_ACCESS_TOKEN", "")
+        mode = "prod" if token.startswith("APP_USR-") else "sandbox"
+        log.info("[MP] running in %s (token prefix: %s…)", mode, token[:8])
+        return Response({"ok": True, "mp_mode": mode, "mp_token_prefix": token[:8]})
+        
 class ListQuizzes(ListAPIView):
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
