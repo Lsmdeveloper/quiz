@@ -1,4 +1,5 @@
 <script>
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 export default {
   data() {
     return {
@@ -6,7 +7,7 @@ export default {
     };
   },
   mounted() {
-    fetch("http://localhost:8000/api/quiz/list")
+    fetch(`${API_BASE_URL}/api/quiz/list`)
       .then((res) => res.json())
       .then((data) => (this.quizzes = data));
   },

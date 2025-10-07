@@ -90,6 +90,7 @@
 </template>
 
 <script>
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 export default {
   data() {
     return {
@@ -125,7 +126,7 @@ export default {
   mounted() {
     const slug = this.$route.params.slug;
     // Inicia a sessão e carrega perguntas
-    fetch("http://localhost:8000/api/quiz/start", {
+    fetch(`${API_BASE_URL}/api/quiz/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ slug }),
@@ -193,7 +194,7 @@ export default {
           })),
         };
 
-        const r1 = await fetch(`http://localhost:8000/api/quiz/${this.sessionId}/answer`, {
+        const r1 = await fetch(`${API_BASE_URL}/api/quiz/${this.sessionId}/answer`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -204,7 +205,7 @@ export default {
         }
 
         const r2 = await fetch(
-          `http://localhost:8000/api/quiz/${this.sessionId}/finish?slug=${this.quiz.slug}`,
+          `${API_BASE_URL}/api/quiz/${this.sessionId}/finish?slug=${this.quiz.slug}`,
           { method: "POST" }
         );
 
