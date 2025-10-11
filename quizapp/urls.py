@@ -1,6 +1,9 @@
 from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
+
 from .views import (
-    BulkCreateQuestions, CreateQuestion, CreateQuiz, ListQuizzes, Health, ListQuestions, StartQuiz, SaveAnswers, FinishQuiz, GetResult, MPWebhook
+    BulkCreateQuestions, CreateQuestion, CreateQuiz, ListQuizzes, Health, ListQuestions, StartQuiz, SaveAnswers, FinishQuiz, GetResult, MPWebhook, UpdateQuiz
 )
 
 urlpatterns = [
@@ -16,4 +19,5 @@ urlpatterns = [
     path("api/quiz/<str:session_id>/finish", FinishQuiz.as_view()), 
     path("api/result/<str:session_id>", GetResult.as_view()),
     path("api/webhooks/mercadopago", MPWebhook.as_view()),
-]
+    path("api/quiz/<slug:slug>/edit", UpdateQuiz.as_view()),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

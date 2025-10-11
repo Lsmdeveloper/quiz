@@ -41,6 +41,7 @@ class QuizCreateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=200)
     description = serializers.CharField(allow_blank=True, required=False)
     is_active = serializers.BooleanField(default=True)
+    cover = serializers.ImageField(required=False, allow_null=True)
 
 class ChoiceCreateSerializer(serializers.Serializer):
     label = serializers.CharField(max_length=200)

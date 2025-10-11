@@ -13,6 +13,8 @@ import requests, hmac, hashlib
 from rest_framework.generics import ListAPIView
 from .models import Quiz, QuizSession, Question, Choice, Answer
 from .serializers import QuizSerializer, QuestionOutSerializer, SaveAnswersSerializer, QuizCreateSerializer, QuestionCreateSerializer, BulkQuestionsSerializer
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.exceptions import APIException
 
 sdk = SDK(settings.MP_ACCESS_TOKEN) if settings.MP_ACCESS_TOKEN else None
 
@@ -27,8 +29,6 @@ def calc_result(session: QuizSession, quiz: Quiz):
     max_points = sum(q.weight for q in quiz.questions.all())
     points = 0.0
     correct_count = 0
-
-    # mapeia respostas por question_id
     answers_map = {a.question_id: set(a.selected or []) for a in session.answers.select_related("question")}
 
     for q in quiz.questions.prefetch_related("choices"):
@@ -41,7 +41,6 @@ def calc_result(session: QuizSession, quiz: Quiz):
             correct_count += 1
 
     percent = (points / max_points * 100.0) if max_points > 0 else 0.0
-    # classificação simples (ajuste os limiares como preferir)
     if percent >= 90:
         cls = "Excelente"
     elif percent >= 70:
@@ -63,12 +62,12 @@ def calc_result(session: QuizSession, quiz: Quiz):
         "disclaimer": "Este resultado é indicativo e não substitui testes psicométricos padronizados."
     }
 
-# class Health(APIView):
-#     def get(self, req): return Response({"ok": True})
-#     MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
-#     MP_MODE = "prod" if MP_ACCESS_TOKEN.startswith("APP_USR-") else "sandbox"
-#     print(f"[MP] running in {MP_MODE} (token prefix: {MP_ACCESS_TOKEN[:8]}…)")
 log = logging.getLogger(__name__)
+
+class ConflictError(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Já existe um quiz com este slug."
+    default_code = "conflict"
 
 class Health(APIView):
     def get(self, req):
@@ -94,30 +93,44 @@ class ListQuestions(APIView):
 
 class CreateQuiz(APIView):
     """Cria ou atualiza um Quiz (POST /api/quizzes)"""
+    parser_classes = [MultiPartParser, FormParser, JSONParser] 
+
     def post(self, req):
         ser = QuizCreateSerializer(data=req.data)
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
+        cover_file = req.FILES.get("cover")
+
+        if Quiz.objects.filter(slug=data["slug"]).exists():
+            raise ConflictError()
+        
         quiz, created = Quiz.objects.get_or_create(
             slug=data["slug"],
             defaults={
                 "title": data["title"],
                 "description": data.get("description", ""),
                 "is_active": data.get("is_active", True),
+                "cover": cover_file, 
             }
         )
         if not created:
             quiz.title = data["title"]
             quiz.description = data.get("description", "")
             quiz.is_active = data.get("is_active", True)
-            quiz.save(update_fields=["title","description","is_active"])
+            if cover_file:
+                quiz.cover = cover_file
+            quiz.save(update_fields=["title","description","is_active","cover"] if cover_file
+                      else ["title","description","is_active"])
         return Response({
-            "slug": quiz.slug, "title": quiz.title, "is_active": quiz.is_active
+            "slug": quiz.slug,
+            "title": quiz.title,
+            "is_active": quiz.is_active,
+            "cover_url": req.build_absolute_uri(quiz.cover.url) if quiz.cover else None,
         }, status=201 if created else 200)
 
 def _upsert_question_with_choices(quiz: Quiz, qdata: dict):
     """Cria/atualiza Question e substitui Choices pelo payload recebido."""
-    question, _ = Question.objects.get_or_create(
+    question, _ = Question.objects.get_or_create( 
         quiz=quiz, slug=qdata["slug"],
         defaults={
             "title": qdata["title"],
@@ -128,7 +141,6 @@ def _upsert_question_with_choices(quiz: Quiz, qdata: dict):
             "weight": qdata.get("weight", 1.0),
         }
     )
-    # Atualiza metadados
     question.title = qdata["title"]
     question.description = qdata.get("description","")
     question.kind = qdata["kind"]
@@ -137,7 +149,6 @@ def _upsert_question_with_choices(quiz: Quiz, qdata: dict):
     question.weight = qdata.get("weight", 1.0)
     question.save()
 
-    # Substitui as choices pelo que veio no payload
     question.choices.all().delete()
     for ch in qdata["choices"]:
         question.choices.create(
@@ -148,6 +159,32 @@ def _upsert_question_with_choices(quiz: Quiz, qdata: dict):
         )
     return question
 
+class UpdateQuiz(APIView):
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def patch(self, req, slug):
+        try:
+            quiz = Quiz.objects.get(slug=slug)
+        except Quiz.DoesNotExist:
+            return Response({"detail": "Quiz não encontrado."}, status=404)
+
+        data = req.data
+        cover_file = req.FILES.get("cover")
+
+        if "title" in data:        quiz.title = data["title"]
+        if "description" in data:  quiz.description = data["description"]
+        if "is_active" in data:    quiz.is_active = data["is_active"] in ["true", "1", True]
+        if cover_file:             quiz.cover = cover_file
+
+        quiz.save()
+        return Response({
+            "slug": quiz.slug,
+            "title": quiz.title,
+            "description": quiz.description,
+            "is_active": quiz.is_active,
+            "cover_url": req.build_absolute_uri(quiz.cover.url) if quiz.cover else None
+        }, status=200)
+    
 class CreateQuestion(APIView):
     """Cria/atualiza 1 pergunta com choices (POST /api/quizzes/<slug>/questions)"""
     def post(self, req, slug):
@@ -178,26 +215,6 @@ class BulkCreateQuestions(APIView):
             created.append(QuestionOutSerializer(q).data)
         return Response({"created": created}, status=201)
 
-
-# class StartQuiz(APIView):
-#     def post(self, req):
-#         slug = req.data.get("slug")
-#         if not slug:
-#             return Response({"error": "Missing slug"}, status=400)
-
-#         try:
-#             quiz = Quiz.objects.get(slug=slug, is_active=True)
-#         except Quiz.DoesNotExist:
-#             return Response({"error": "quiz not found"}, status=404)
-
-#         qs = quiz.questions.prefetch_related("choices").all()
-#         questions_data = QuestionOutSerializer(qs, many=True).data
-
-#         return Response({
-#             "session_id": None,
-#             "quiz": QuizSerializer(quiz).data,
-#             "questions": questions_data
-#         })
 class StartQuiz(APIView):
     def post(self, req):
         slug = req.data.get("slug")

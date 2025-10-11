@@ -5,12 +5,19 @@ import uuid
 def gen_id():
     return secrets.token_hex(16)  # 32 chars
 
+
+def quiz_cover_path(instance, filename):
+    ext = filename.split('.')[-1].lower()
+    return f"quizzes/{instance.slug}/cover.{ext}"
+
 class Quiz(models.Model):
     slug = models.SlugField(max_length=64, unique=True)         
     title = models.CharField(max_length=200)                     
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
 
+    cover = models.ImageField(upload_to=quiz_cover_path, blank=True, null=True)
+    
     class Meta:
         ordering = ["slug"]
 
